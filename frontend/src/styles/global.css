@@ -1,0 +1,64 @@
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 登录页渐变背景动画 */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* 侧边栏菜单样式 */
+.ant-layout-sider .ant-menu {
+  border-right: none;
+}
+
+/* 隐藏侧边栏菜单滚动条（Chrome/Safari/Edge + Firefox + IE） */
+.sider-menu-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.sider-menu-no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 卡片 hover 效果 */
+.ant-card-hoverable:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+/* 统计数字样式 */
+.ant-statistic-content-value {
+  font-weight: 600;
+}
+
+/* 表格行 hover 光标 */
+.ant-table-row {
+  cursor: pointer;
+}

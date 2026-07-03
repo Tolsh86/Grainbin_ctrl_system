@@ -1,0 +1,54 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+.env
+*.env.local
+
+# uv
+uv.lock
+.python-version
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+docker/pgdata/
+docker/minio_data/
+docker/redis_data/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Alembic
+backend/alembic/versions/*.pyc
+
+# Uploaded files
+backend/uploads/
+backend/media/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid

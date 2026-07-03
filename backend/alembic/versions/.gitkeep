@@ -1,0 +1,2 @@
+# Alembic 迁移脚本目录
+# 运行 `alembic revision --autogenerate -m "描述"` 自动生成迁移脚本
