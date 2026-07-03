@@ -52,3 +52,12 @@ backend/media/
 # Celery
 celerybeat-schedule
 celerybeat.pid
+
+
+# Documentation files (not for version control)
+docx/
+*.docx
+*.doc
+
+# Local working files (not for version control)
+粮仓过控系统-表格/

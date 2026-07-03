@@ -2,7 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_db_utils.py -v --tb=short)",
+      "Bash(.venv/Scripts/python -c \"import aiosqlite; print\\(aiosqlite.__version__\\)\")",
+      "Bash(.venv/Scripts/pip install *)",
+      "Bash(uv add *)",
+      "Bash(pip install *)",
+      "Bash(python *)",
+      "Bash(.venv/Scripts/python -c \"import minio; print\\(minio.__version__\\)\")",
+      "Bash(\"D:/company/Grainbin_system/backend/.venv/Scripts/pip\" install *)",
+      "Bash(\"/d/company/Grainbin_system/backend/.venv/Scripts/pip\" install *)",
+      "Bash(\"/d/company/Grainbin_system/backend/.venv/Scripts/python.exe\" -m pip install minio)",
+      "Bash(\"/d/company/Grainbin_system/backend/.venv/Scripts/python.exe\" --version)",
+      "Bash(\"/d/company/Grainbin_system/backend/.venv/Scripts/python.exe\" -c \"import pip; print\\(pip.__version__\\)\")",
+      "Bash(/d/company/Grainbin_system/backend/.venv/Scripts/python.exe *)"
     ]
   }
 }

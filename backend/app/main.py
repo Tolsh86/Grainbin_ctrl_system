@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
 from app.routers.api import api_router
 
 
@@ -39,6 +40,23 @@ logger.add(
 async def lifespan(app: FastAPI):
     """应用启动/关闭事件。"""
     logger.info(f"🚀 {settings.APP_NAME} 启动中...")
+
+    # Redis
+    try:
+        from app.utils.redis_client import redis_client
+        await redis_client.init()
+        logger.info("✅ Redis 连接正常")
+    except Exception as e:
+        logger.warning(f"⚠️ Redis 连接失败: {e}")
+
+    # MinIO
+    try:
+        from app.utils.minio_client import minio_client
+        await minio_client.init()
+        logger.info("✅ MinIO 连接正常")
+    except Exception as e:
+        logger.warning(f"⚠️ MinIO 连接失败: {e}")
+
     # 验证数据库连接
     try:
         from app.core.database import engine
@@ -47,7 +65,15 @@ async def lifespan(app: FastAPI):
         logger.info("✅ 数据库连接正常")
     except Exception as e:
         logger.warning(f"⚠️ 数据库连接失败: {e}")
+
     yield
+
+    # 关闭资源
+    try:
+        from app.utils.redis_client import redis_client
+        await redis_client.close()
+    except Exception:
+        pass
     logger.info(f"👋 {settings.APP_NAME} 已关闭")
 
 
@@ -73,6 +99,9 @@ app.add_middleware(
 
 # ── 路由 ──────────────────────────────────────────
 app.include_router(api_router)
+
+# ── 异常处理器 ──────────────────────────────────────
+register_exception_handlers(app)
 
 
 # ── 健康检查 ──────────────────────────────────────

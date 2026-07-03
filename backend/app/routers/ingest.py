@@ -30,7 +30,7 @@ async def upload_file(
     file: UploadFile = File(..., description="上传文件"),
     mapping_id: uuid.UUID = Form(None, description="字段映射 ID"),
     db: AsyncSession = Depends(get_db),
-    current_user_id: uuid.UUID = Depends(require_role("editor")),
+    current_user_id: uuid.UUID = Depends(require_role("operator")),
 ):
     """上传文件并创建清洗批次。
 
@@ -125,7 +125,7 @@ async def list_batch_rows(
 async def commit_batch(
     batch_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user_id: uuid.UUID = Depends(require_role("editor")),
+    current_user_id: uuid.UUID = Depends(require_role("operator")),
 ):
     """确认入库：将校验通过的行写入 t_data_rows。"""
     batch = await ingest_service.commit_batch(db, batch_id)
@@ -186,7 +186,7 @@ async def list_mappings(
 async def create_mapping(
     data: FieldMappingCreate,
     db: AsyncSession = Depends(get_db),
-    current_user_id: uuid.UUID = Depends(require_role("editor")),
+    current_user_id: uuid.UUID = Depends(require_role("operator")),
 ):
     """新建字段映射。"""
     mapping = FieldMapping(

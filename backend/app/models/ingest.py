@@ -96,6 +96,9 @@ class IngestRow(Base, UUIDMixin, TimestampMixin):
     amount: Mapped[int | None] = mapped_column(BigInteger, comment="金额（分）")
     cost_type: Mapped[str | None] = mapped_column(String(50), comment="费用类型")
     validation_flags: Mapped[dict] = mapped_column(JSONB, default=dict, comment="校验项明细：每项含 rule/level/message")
+    validation_status: Mapped[str | None] = mapped_column(
+        String(20), comment="校验总体状态：normal/warning/error/suspicious"
+    )
     quality_score: Mapped[float | None] = mapped_column(Numeric(5, 2), comment="单行清洗质量分")
     is_valid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="校验是否通过")
     error_code: Mapped[str | None] = mapped_column(String(50), comment="错误码")

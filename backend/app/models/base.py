@@ -2,8 +2,10 @@
 
 提供:
 - Base: SQLAlchemy 2.0 声明式基类
-- TimestampMixin: created_at / updated_at
 - UUIDMixin: UUID 主键
+- TimestampMixin: created_at / updated_at
+- SoftDeleteMixin: 软删除 deleted_at
+- DictMixin: 字典表通用 Mixin
 """
 
 from __future__ import annotations
@@ -11,7 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -56,4 +58,21 @@ class SoftDeleteMixin:
         nullable=True,
         default=None,
         comment="软删除时间",
+    )
+
+
+class DictMixin:
+    """字典表通用 Mixin — 统一结构 (code, name, sort_order, is_active)。"""
+
+    code: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, index=True, comment="字典编码"
+    )
+    name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="显示名称"
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, comment="排序序号"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, comment="是否启用"
     )
