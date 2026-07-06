@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "grainbin"
     MINIO_SECURE: bool = False
 
+    # ── 文件上传 ──────────────────────────
+    MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024  # 50MB
+    ALLOWED_EXTENSIONS: set[str] = {"xlsx", "xls", "csv"}
+
     # ── JWT ────────────────────────────────
     JWT_SECRET_KEY: str = "change-me-to-a-random-secret-key-in-production"
     JWT_ALGORITHM: Literal["HS256"] = "HS256"

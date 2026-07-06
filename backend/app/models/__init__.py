@@ -32,6 +32,13 @@ from app.models.dict_tables import (
 from app.models.report import ReportTemplate, Report
 from app.models.knowledge import KnowledgeDoc, KnowledgeChunk
 
+# ── 二类费用 + 审核台账 (V2.2 注册) ──
+from app.models.secondary_cost import SecondaryCostLedger
+from app.models.payment_audit import PaymentAudit
+
+# ── 节点模板 (V2.2 新建) ──
+from app.models.node_template import NodeTemplate
+
 # ── 数据导入流水线 ──
 from app.models.ingest import (
     IngestBatch, IngestRow, IngestError, FieldMapping,
@@ -57,4 +64,8 @@ __all__ = [
     "KnowledgeDoc", "KnowledgeChunk",
     # 数据导入
     "IngestBatch", "IngestRow", "IngestError", "FieldMapping",
+    # 二类费用 + 审核台账
+    "SecondaryCostLedger", "PaymentAudit",
+    # 节点模板
+    "NodeTemplate",
 ]

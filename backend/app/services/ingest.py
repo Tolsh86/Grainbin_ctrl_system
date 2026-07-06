@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,16 +98,32 @@ async def get_batch_rows(
 
 
 async def commit_batch(db: AsyncSession, batch_id: uuid.UUID) -> IngestBatch | None:
-    """确认入库：将批次中 is_valid=True 的行写入 t_data_rows。"""
-    batch = await get_batch(db, batch_id)
+    """确认入库：将批次中 is_valid=True 的行写入 t_data_rows。
+
+    事务安全：
+    - SELECT ... FOR UPDATE 锁定批次行，防止并发重复入库
+    - 所有 DataRow + IngestRow 更新在同一事务内
+    - 显式 commit，失败时整批回滚不留脏数据
+    """
+    # 行锁：防止并发提交
+    result = await db.execute(
+        select(IngestBatch).where(IngestBatch.id == batch_id).with_for_update()
+    )
+    batch = result.scalar_one_or_none()
     if not batch or batch.status not in ("review", "validated"):
         return None
 
     # 获取所有校验通过的行
-    result = await db.execute(
-        select(IngestRow).where(IngestRow.batch_id == batch_id, IngestRow.is_valid == True)
+    rows_result = await db.execute(
+        select(IngestRow).where(
+            IngestRow.batch_id == batch_id,
+            IngestRow.is_valid == True,
+        )
     )
-    valid_rows = result.scalars().all()
+    valid_rows = rows_result.scalars().all()
+
+    now = datetime.now(UTC)
+    data_row_ids: list[uuid.UUID] = []
 
     for row in valid_rows:
         data_row = DataRow(
@@ -123,33 +140,50 @@ async def commit_batch(db: AsyncSession, batch_id: uuid.UUID) -> IngestBatch | N
             source_doc=batch.source_doc,
             source_type="upload",
             is_confirmed=True,
-            confirmed_at=datetime.now(UTC),
+            confirmed_at=now,
         )
         db.add(data_row)
-        await db.flush()
+        await db.flush()  # 获取 data_row.id
         row.target_data_row_id = data_row.id
+        data_row_ids.append(data_row.id)
 
     batch.status = "committed"
-    batch.committed_at = datetime.now(UTC)
-    await db.flush()
+    batch.committed_at = now
+
+    await db.commit()
+    logger.info(
+        f"入库完成: batch={batch_id}, rows={len(valid_rows)}, "
+        f"data_row_ids=[{', '.join(str(d) for d in data_row_ids[:5])}...]"
+    )
     await db.refresh(batch)
     return batch
 
 
 async def rollback_batch(db: AsyncSession, batch_id: uuid.UUID) -> IngestBatch | None:
-    """整批撤回：将已入库的 t_data_rows 软删除。"""
-    batch = await get_batch(db, batch_id)
+    """整批撤回：将已入库的 t_data_rows 软删除。
+
+    事务安全：
+    - SELECT ... FOR UPDATE 锁定批次行
+    - 所有 DataRow 软删除在同一事务内
+    - 显式 commit
+    """
+    result = await db.execute(
+        select(IngestBatch).where(IngestBatch.id == batch_id).with_for_update()
+    )
+    batch = result.scalar_one_or_none()
     if not batch or batch.status != "committed":
         return None
 
     # 查找已映射的 data_row
-    result = await db.execute(
+    rows_result = await db.execute(
         select(IngestRow).where(
             IngestRow.batch_id == batch_id,
             IngestRow.target_data_row_id.isnot(None),
         )
     )
-    rows = result.scalars().all()
+    rows = rows_result.scalars().all()
+
+    now = datetime.now(UTC)
 
     for row in rows:
         if row.target_data_row_id:
@@ -158,10 +192,12 @@ async def rollback_batch(db: AsyncSession, batch_id: uuid.UUID) -> IngestBatch |
             )
             data_row = data_result.scalar_one_or_none()
             if data_row:
-                data_row.deleted_at = datetime.now(UTC)
+                data_row.deleted_at = now
 
     batch.status = "rolled_back"
-    batch.rolled_back_at = datetime.now(UTC)
-    await db.flush()
+    batch.rolled_back_at = now
+
+    await db.commit()
+    logger.info(f"撤回完成: batch={batch_id}, data_rows={len(rows)}")
     await db.refresh(batch)
     return batch

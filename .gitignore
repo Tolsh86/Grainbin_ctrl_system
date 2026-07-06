@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*.coverage
+
 # Virtual environments
 .venv/
 venv/
@@ -53,11 +59,12 @@ backend/media/
 celerybeat-schedule
 celerybeat.pid
 
+.claude
+.workbuddy
 
 # Documentation files (not for version control)
 docx/
-*.docx
-*.doc
 
 # Local working files (not for version control)
 粮仓过控系统-表格/
+

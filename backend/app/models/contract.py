@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -94,6 +94,26 @@ class ContractPaymentStage(Base, UUIDMixin, TimestampMixin):
     )
     payment_terms: Mapped[str | None] = mapped_column(
         Text, comment="支付条款原文"
+    )
+
+    # ── 节点核心字段 (V2.2 新增) ──
+    node_name: Mapped[str | None] = mapped_column(
+        String(100), comment="节点名称（如'合同签订''竣工验收'），用于从模板生成"
+    )
+    agreed_ratio: Mapped[float | None] = mapped_column(
+        Numeric(6, 4), comment="合同约定的该节点支付比例（如 0.1000 = 10%）"
+    )
+    agreed_amount: Mapped[int | None] = mapped_column(
+        BigInteger, comment="约定应支付金额（分）= contract_amount × agreed_ratio，系统自动计算"
+    )
+    planned_pay_date: Mapped[date | None] = mapped_column(
+        Date, comment="预计支付日期（合同签订日 + 偏移天数）"
+    )
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, comment="该节点是否已完成（用户手动标记）"
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="完成时间"
     )
 
     # ── 汇总数据 (仅在 stage_order=0 时有意义) ──

@@ -186,11 +186,11 @@ def validate_uniqueness(
 # 综合校验入口
 # ═══════════════════════════════════════════════════
 
-# 默认校验规则配置（与计划书一致）
+# 默认校验规则配置
+# 注：project_id 不在行级别必填 — 由批次级别继承注入；category 可选。
 DEFAULT_VALIDATION_RULES: dict[str, Any] = {
-    "required": ["project_id", "data_date", "category", "item_name", "amount"],
+    "required": ["data_date", "item_name", "amount"],
     "types": {
-        "project_id": "uuid",
         "data_date": "date",
         "amount": "bigint_positive",
         "planned_quantity": "bigint_non_negative",
@@ -202,7 +202,7 @@ DEFAULT_VALIDATION_RULES: dict[str, Any] = {
         "unit_price": [0, 100_000_000_00],  # 0 ~ 1 亿元单价
     },
     "uniqueness": [
-        ["project_id", "data_date", "item_name"],
+        ["data_date", "item_name"],
     ],
     "references": {
         "project_id": ("t_projects", "id"),

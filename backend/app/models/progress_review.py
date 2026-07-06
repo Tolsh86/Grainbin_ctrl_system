@@ -11,7 +11,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import UUIDMixin, TimestampMixin, Base
@@ -93,6 +93,11 @@ class ProgressPaymentReview(Base, UUIDMixin, TimestampMixin):
     )
     settlement_pay_ratio: Mapped[float | None] = mapped_column(
         Numeric(6, 4), comment="竣工结算服务费付款比例"
+    )
+
+    # ── 审核类型特有动态字段 (V2.2 新增) ──
+    extra_fields: Mapped[dict | None] = mapped_column(
+        JSONB, comment="审核类型特有的动态字段。施工审核示例: {\"建安工程费\": xxx, \"安全文明费\": xxx}；未来检测审核无需改表结构"
     )
 
     # ── 备注 ──

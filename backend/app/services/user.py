@@ -129,6 +129,7 @@ async def login(db: AsyncSession, username: str, password: str) -> TokenResponse
     # 更新最后登录时间
     user.last_login_at = datetime.now(UTC)
     await db.flush()
+    await db.refresh(user, ["updated_at", "last_login_at"])
 
     access_token = create_access_token(data={"sub": str(user.id)})
     return TokenResponse(

@@ -15,7 +15,7 @@ from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, I
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import UUIDMixin, TimestampMixin, Base
+from app.models.base import UUIDMixin, TimestampMixin, SoftDeleteMixin, Base
 
 
 # ═══════════════════════════════════════════════
@@ -168,10 +168,14 @@ class IngestError(Base, UUIDMixin):
 # 字段映射配置
 # ═══════════════════════════════════════════════
 
-class FieldMapping(Base, UUIDMixin, TimestampMixin):
+class FieldMapping(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "t_field_mappings"
 
     mapping_name: Mapped[str] = mapped_column(String(200), nullable=False, comment="映射名（如'监理月报标准表头'）")
+    biz_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="general", index=True,
+        comment="业务类型: weekly/monthly/progress_payment/general",
+    )
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("t_projects.id"), comment="适用项目（NULL = 通用）",
     )
