@@ -44,8 +44,11 @@ class Project(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     implement_body: Mapped[str | None] = mapped_column(
         String(200), comment="实施主体（可能含换行拼接，如'产投集团\\n省食油储备'）"
     )
-    implement_period: Mapped[str | None] = mapped_column(
-        String(50), comment="实施时间（如'2025.12-2027.11'）"
+    start_date: Mapped[date | None] = mapped_column(
+        Date, comment="实施起始月（如 2025-12-01）"
+    )
+    end_date: Mapped[date | None] = mapped_column(
+        Date, comment="实施结束月（如 2027-11-01）"
     )
     expected_return: Mapped[str | None] = mapped_column(
         Text, comment="投资预期收益说明"
@@ -111,6 +114,9 @@ class Project(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
 
     # ── 关系 ──
     contracts: Mapped[list["Contract"]] = relationship("Contract", back_populates="project", lazy="selectin")
+    reporting_periods: Mapped[list["ReportingPeriod"]] = relationship(
+        "ReportingPeriod", back_populates="project", lazy="selectin"
+    )
     progress_reviews: Mapped[list["ProgressPaymentReview"]] = relationship(
         "ProgressPaymentReview", back_populates="project", lazy="selectin"
     )

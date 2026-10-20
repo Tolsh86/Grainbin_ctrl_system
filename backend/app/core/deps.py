@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.exceptions import Unauthorized, Forbidden
 from app.core.security import decode_access_token
+from app.core.config import settings
 
 # ── 鉴权方案 ────────────────────────────────────
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -40,11 +41,24 @@ async def _get_user_id_from_token(
         raise Unauthorized(detail="令牌无效或已过期")
 
 
+# 开发模式默认用户 ID（免登录）
+_DEV_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> uuid.UUID:
-    """获取当前登录用户 ID（仅要求已登录）。"""
-    return await _get_user_id_from_token(credentials)
+    """获取当前登录用户 ID；仅在本地开发开启免登录。"""
+    if credentials is None:
+        if settings.AUTH_BYPASS_ENABLED:
+            return _DEV_USER_ID
+        raise Unauthorized(detail="未提供认证令牌")
+    try:
+        return await _get_user_id_from_token(credentials)
+    except Unauthorized:
+        if settings.AUTH_BYPASS_ENABLED:
+            return _DEV_USER_ID
+        raise
 
 
 def require_role(minimum_role: str):
@@ -60,14 +74,28 @@ def require_role(minimum_role: str):
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
         db: AsyncSession = Depends(get_db),
     ) -> uuid.UUID:
-        user_id = await _get_user_id_from_token(credentials)
+        # 开发阶段免登录
+        if credentials is None:
+            if settings.AUTH_BYPASS_ENABLED:
+                return _DEV_USER_ID
+            raise Unauthorized(detail="未提供认证令牌")
+        try:
+            user_id = await _get_user_id_from_token(credentials)
+        except Unauthorized:
+            if settings.AUTH_BYPASS_ENABLED:
+                return _DEV_USER_ID
+            raise
         # 延迟导入避免循环依赖
         from app.models.user import User
 
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None:
-            raise Unauthorized(detail="用户不存在")
+            if settings.AUTH_BYPASS_ENABLED:
+                return _DEV_USER_ID
+            raise Unauthorized(detail="用户不存在或已被删除")
+        if not user.is_active:
+            raise Unauthorized(detail="账号已被停用")
 
         user_level = ROLE_HIERARCHY.get(user.role, 99)
         required_level = ROLE_HIERARCHY.get(minimum_role, 99)

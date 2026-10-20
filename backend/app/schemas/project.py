@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date as date_type, datetime
 
 from pydantic import BaseModel, Field
 
@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 class ProjectCreate(BaseModel):
     """创建项目"""
     project_name: str = Field(..., min_length=1, max_length=200, description="项目名称")
-    project_code: str = Field(..., min_length=1, max_length=50, description="项目编码（业务唯一标识）")
+    project_code: str | None = Field(None, max_length=50, description="项目编码，留空则自动生成 PJ-YYYYMMDD-NNN")
 
     # 项目分类
     project_nature: str = Field("功能性项目", description="项目性质")
@@ -25,7 +25,8 @@ class ProjectCreate(BaseModel):
     invest_structure: str | None = Field(None, description="投资结构")
     invest_field: str | None = Field(None, description="投资领域")
     implement_body: str | None = Field(None, description="实施主体")
-    implement_period: str | None = Field(None, description="实施时间")
+    start_date: date_type | None = Field(None, description="实施起始月（如 2026-07-01，配合 duration_months 自动计算结束月）")
+    duration_months: int = Field(24, ge=1, le=360, description="实施持续时间（月），默认 24")
     expected_return: str | None = Field(None, description="投资预期收益")
     business_class: str | None = Field(None, description="业务划分")
     region: str = Field("市内", description="区域")
@@ -66,7 +67,8 @@ class ProjectUpdate(BaseModel):
     invest_structure: str | None = Field(None, description="投资结构")
     invest_field: str | None = Field(None, description="投资领域")
     implement_body: str | None = Field(None, description="实施主体")
-    implement_period: str | None = Field(None, description="实施时间")
+    start_date: date_type | None = Field(None, description="实施起始月，配合 duration_months 自动计算结束月")
+    duration_months: int | None = Field(None, ge=1, le=360, description="实施持续时间（月），配合 start_date 自动计算 end_date")
     expected_return: str | None = Field(None, description="投资预期收益")
     business_class: str | None = Field(None, description="业务划分")
     region: str | None = Field(None, description="区域")
@@ -102,7 +104,8 @@ class ProjectResponse(BaseModel):
     invest_structure: str | None = None
     invest_field: str | None = None
     implement_body: str | None = None
-    implement_period: str | None = None
+    start_date: date_type | None = None
+    end_date: date_type | None = None
     expected_return: str | None = None
     business_class: str | None = None
     region: str

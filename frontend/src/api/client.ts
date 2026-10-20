@@ -24,7 +24,7 @@ client.interceptors.request.use(
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && window.location.pathname !== "/login") {
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       window.location.href = "/login";

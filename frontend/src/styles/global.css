@@ -62,3 +62,66 @@ body {
 .ant-table-row {
   cursor: pointer;
 }
+
+/* ── 月度总览页面专用样式 ── */
+
+/* 月份卡片 hover 效果 */
+.month-cell:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 年份切换箭头 hover */
+.year-arrow-btn:hover {
+  background: #e8e8e8 !important;
+}
+
+/* 月份滚动容器 - 隐藏滚动条 */
+.month-scroll-container::-webkit-scrollbar {
+  height: 4px;
+}
+.month-scroll-container::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 4px;
+}
+.month-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+.month-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 合同卡片 hover 效果 */
+.contract-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  border-color: #d6e4ff !important;
+}
+
+/* 节点标签 hover 效果 */
+.node-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Collapse 面板样式增强 */
+.ant-collapse-item {
+  margin-bottom: 8px !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  border: 1px solid #f0f0f0 !important;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+.ant-collapse-item:hover {
+  border-color: #d6e4ff !important;
+}
+.ant-collapse-item.ant-collapse-item-active {
+  border-color: #91caff !important;
+}
+.ant-collapse-header {
+  border-radius: 10px !important;
+  padding: "12px 16px" !important;
+}
+.ant-collapse-content {
+  border-top: 1px solid #f0f0f0 !important;
+}

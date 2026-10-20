@@ -19,7 +19,7 @@ from app.models.base import UUIDMixin, TimestampMixin, SoftDeleteMixin, Base
 try:
     from pgvector.sqlalchemy import Vector
 except ImportError:
-    from sqlalchemy import NullType as Vector  # type: ignore[assignment]
+    Vector = lambda dim: __import__("sqlalchemy").Text()  # type: ignore
 
 
 class KnowledgeDoc(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):

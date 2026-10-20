@@ -18,6 +18,7 @@ from app.schemas.ingest import (
 )
 from app.models.ingest import IngestError, FieldMapping
 from app.services import ingest as ingest_service
+from app.services import batch_service
 
 router = APIRouter(prefix="/ingest", tags=["数据入库"])
 
@@ -117,6 +118,24 @@ async def list_batch_rows(
     pages = (total + page_size - 1) // page_size
     return PaginatedResponse(
         items=[IngestRowResponse.model_validate(r) for r in items],
+        total=total, page=page, page_size=page_size, pages=pages,
+    )
+
+
+@router.get("/batches/{batch_id}/errors", response_model=PaginatedResponse[IngestErrorResponse])
+async def list_batch_errors(
+    batch_id: uuid.UUID,
+    severity: str | None = Query(None, description="按严重级别筛选: error/warning/info"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: uuid.UUID = Depends(get_current_user),
+):
+    """获取批次错误日志（分页+按严重级别筛选）。"""
+    items, total = await batch_service.get_batch_errors(db, batch_id, page, page_size, severity)
+    pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=[IngestErrorResponse.model_validate(e) for e in items],
         total=total, page=page, page_size=page_size, pages=pages,
     )
 

@@ -121,7 +121,7 @@ def seed_node_templates(session: Session) -> int:
             biz_type=item["biz_type"],
             description=item["description"],
             is_preset=True,
-            stages={"stages": [
+            stages=[
                 {
                     "order": s["order"],
                     "node_name": s["node_name"],
@@ -130,13 +130,84 @@ def seed_node_templates(session: Session) -> int:
                     "offset_days": s["offset_days"],
                 }
                 for s in item["stages"]
-            ]},
+            ],
         )
         session.add(template)
         count += 1
 
     session.flush()
     return count
+
+
+# ── 合同费用分项种子数据（按 contract_no 匹配） ──
+CONTRACT_FEE_ITEMS: list[dict] = [
+    # 施工合同 — 德阳建工 (CX001)
+    {"contract_no": "CX001", "items": [
+        {"item_name": "建筑安装工程费", "current_ratio": 0.10, "sort_order": 1},
+        {"item_name": "安全文明施工费", "current_ratio": 0.50, "sort_order": 2},
+    ]},
+    # 设备合同 — 中机建设 (CX005)
+    {"contract_no": "CX005", "items": [
+        {"item_name": "设备安装调试费", "contract_amount": 32564430, "current_ratio": 0.20, "sort_order": 1},
+    ]},
+    # 设计合同 — 中储粮成都储藏研究院 (CX003)
+    {"contract_no": "CX003", "items": [
+        {"item_name": "设计费", "contract_amount": 1937160, "current_ratio": 0.20, "sort_order": 1},
+    ]},
+    # 监理合同 — 中凯俊成咨询 (CX011)
+    {"contract_no": "CX011", "items": [
+        {"item_name": "工程监理服务费", "current_ratio": 0.10, "sort_order": 1},
+        {"item_name": "造价咨询服务费", "current_ratio": 0.20, "sort_order": 2},
+        {"item_name": "竣工结算服务费", "current_ratio": 0.30, "sort_order": 3},
+    ]},
+]
+
+
+def seed_contract_fee_items(session: Session) -> int:
+    """为已有合同预填费用分项模板。返回新增行数。"""
+    from app.models.contract import Contract
+    from app.models.contract_fee_item import ContractFeeItem
+
+    count = 0
+    for entry in CONTRACT_FEE_ITEMS:
+        contract = session.execute(
+            select(Contract).where(Contract.contract_no == entry["contract_no"])
+        ).scalar_one_or_none()
+        if not contract:
+            continue
+
+        for item in entry["items"]:
+            existing = session.execute(
+                select(ContractFeeItem).where(
+                    ContractFeeItem.contract_id == contract.id,
+                    ContractFeeItem.item_name == item["item_name"],
+                )
+            ).scalar_one_or_none()
+            if existing:
+                continue
+            fee_item = ContractFeeItem(
+                contract_id=contract.id,
+                item_name=item["item_name"],
+                contract_amount=item.get("contract_amount"),
+                current_ratio=item.get("current_ratio"),
+                sort_order=item.get("sort_order", 0),
+            )
+            session.add(fee_item)
+            count += 1
+
+    session.flush()
+    return count
+
+
+def seed_backfill_review_mode(session: Session) -> int:
+    """将存量 NULL review_mode 回填为 'daily_aggregate'。返回更新的行数。"""
+    from app.models.contract import Contract
+
+    result = session.execute(
+        text("UPDATE t_contracts SET review_mode = 'daily_aggregate' WHERE review_mode IS NULL")
+    )
+    session.flush()
+    return result.rowcount
 
 
 def seed_all(dry_run: bool = False) -> dict:
@@ -157,6 +228,8 @@ def seed_all(dry_run: bool = False) -> dict:
     with Session(engine) as session:
         sup_count = seed_dict_suppliers(session)
         tmp_count = seed_node_templates(session)
+        bf_count = seed_backfill_review_mode(session)
+        fee_count = seed_contract_fee_items(session)
 
         if dry_run:
             session.rollback()
@@ -168,6 +241,8 @@ def seed_all(dry_run: bool = False) -> dict:
         return {
             "suppliers_added": sup_count,
             "templates_added": tmp_count,
+            "backfilled_review_mode": bf_count,
+            "fee_items_added": fee_count,
         }
 
 
@@ -177,6 +252,8 @@ def main():
     result = seed_all(dry_run=dry_run)
     print(f"供应商新增: {result['suppliers_added']}")
     print(f"节点模板新增: {result['templates_added']}")
+    print(f"回填 review_mode: {result['backfilled_review_mode']} 行")
+    print(f"费用分项模板新增: {result['fee_items_added']} 行")
     print("种子数据完成!")
 
 

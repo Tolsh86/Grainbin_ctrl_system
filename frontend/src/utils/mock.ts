@@ -213,14 +213,6 @@ export const mockPaymentNodes: Record<string, PaymentNode[]> = {
   ],
 };
 
-// ========== 二类费用合同 ==========
-export const mockSecondaryContracts = [
-  { id: "sc1", contract_name: "监理服务合同", project_id: "p1", project_name: "1-6号粮仓新建工程", fee_type: "监理", contractor: "建科监理公司", contract_amount: 280000000, start_date: "2025-06-01", end_date: "2027-03-31", status: "active" as const, notes: "含5个支付节点" },
-  { id: "sc2", contract_name: "设计服务合同", project_id: "p1", project_name: "1-6号粮仓新建工程", fee_type: "设计", contractor: "粮食设计院", contract_amount: 150000000, start_date: "2025-03-01", end_date: "2027-06-30", status: "active" as const, notes: "含现场服务期" },
-  { id: "sc3", contract_name: "质量检测合同", project_id: "p2", project_name: "7-12号粮仓改造工程", fee_type: "检测", contractor: "省检测中心", contract_amount: 60000000, start_date: "2025-10-01", end_date: "2026-12-31", status: "active" as const, notes: "" },
-  { id: "sc4", contract_name: "造价咨询合同", project_id: "p3", project_name: "智能通风系统安装", fee_type: "咨询", contractor: "造价咨询公司", contract_amount: 45000000, start_date: "2026-03-01", end_date: "2026-08-30", status: "terminated" as const, notes: "合同已终止" },
-];
-
 // ========== 二类费用：节点模板 ==========
 export interface NodeTemplate {
   id: string; name: string; fee_type: string; is_builtin: boolean; status: string;
@@ -360,20 +352,6 @@ export const CONVERTERS = [
   { value: "trim", label: "去空格 (trim)" },
   { value: "lowercase", label: "转小写 (lowercase)" },
 ];
-
-// ========== 提醒设置 ==========
-export const mockReminderSettings = {
-  default_days: 7,
-  channels: ["站内信"],
-  remind_time: "09:00",
-  contract_overrides: [
-    { contract_id: "sc1", contract_name: "监理服务合同", days: 14, channels: ["站内信", "邮件"] },
-  ],
-  history: [
-    { id: "rh1", time: "2026-06-30 09:00", node_name: "中期监理费", contract_name: "监理服务合同", channel: "站内信", status: "已发送" },
-    { id: "rh2", time: "2026-06-23 09:00", node_name: "中期检测", contract_name: "质量检测合同", channel: "站内信", status: "已发送" },
-  ],
-};
 
 // ========== 工具函数 ==========
 export const formatYuan = (fen: number) => (fen / 100).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

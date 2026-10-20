@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.routers import auth, projects, users, ingest, dicts, upload, mapping, batch, contracts, reviews
+from app.routers import auth, projects, users, ingest, dicts, upload, mapping, batch, contracts, reviews, audit, monthly, payments, periods
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -16,5 +16,9 @@ api_router.include_router(mapping.router)
 api_router.include_router(batch.router)
 api_router.include_router(contracts.router)
 api_router.include_router(reviews.router)
+api_router.include_router(audit.router)
+api_router.include_router(monthly.router)
+api_router.include_router(payments.router)
+api_router.include_router(periods.router)
 
 __all__ = ["api_router"]

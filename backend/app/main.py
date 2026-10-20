@@ -82,9 +82,9 @@ app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
     description="专为粮仓类工程全过程控制（过控）场景设计的智能管理系统",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/api/v1/openapi.json",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+    openapi_url="/api/v1/openapi.json" if settings.DEBUG else None,
     lifespan=lifespan,
 )
 

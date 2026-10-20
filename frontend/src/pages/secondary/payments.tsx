@@ -1,251 +1,456 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card, Table, Tag, Button, Space, Statistic, Row, Col,
-  Modal, DatePicker, InputNumber, Input, message, Select, Typography
+  Modal, InputNumber, Input, message, Select, Typography,
+  Collapse, Popconfirm, Tooltip, Divider,
 } from "antd";
 import {
-  ExportOutlined, CheckCircleOutlined, SearchOutlined
+  PlusOutlined, CheckCircleOutlined, CloseCircleOutlined,
 } from "@ant-design/icons";
-import { mockSecondaryContracts, mockPaymentNodes, mockFeeTypes, formatYuan } from "../../utils/mock";
+import dayjs from "dayjs";
+import { getProjects } from "../../api/projects";
+import { getContractGroups, getContractNodes } from "../../api/contracts";
+import type { Contract } from "../../api/contracts";
+import type { PaymentStage } from "../../api/contracts";
+import {
+  getContractPayments, createPayment, confirmPayment, rejectPayment,
+} from "../../api/payments";
+import type { PaymentResponse, PaymentLedgerGroup } from "../../api/payments";
 
 const { Text } = Typography;
 
-const STATUS_MAP: Record<string, { color: string; text: string }> = {
-  paid: { color: "green", text: "已支付" },
-  overdue: { color: "red", text: "逾期未付" },
-  pending: { color: "default", text: "未到期" },
+// ── 金额工具（分 → 元） ──
+
+const fenToYuan = (fen: number): string => {
+  return (fen / 100).toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };
 
-export default function PaymentLedger() {
-  const [reconOpen, setReconOpen] = useState(false);
-  const [payModalOpen, setPayModalOpen] = useState(false);
-  const [payingNode, setPayingNode] = useState<any>(null);
-  const [filterContract, setFilterContract] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterFeeType, setFilterFeeType] = useState<string>("all");
+// ── 状态标签 ──
 
-  // 动态汇总全量支付台账
-  const allPayments = useMemo(() => {
-    const list: any[] = [];
-    mockSecondaryContracts.forEach((contract) => {
-      const nodes = mockPaymentNodes[contract.id];
-      if (!nodes) return;
-      nodes.forEach((node) => {
-        list.push({
-          id: node.id,
-          nodeName: node.name,
-          contractName: contract.contract_name,
-          contractId: contract.id,
-          project: contract.project_name,
-          feeType: contract.fee_type,
-          contractor: contract.contractor,
-          dueAmount: node.amount,
-          paidAmount: node.paid_amount || 0,
-          remainingAmount: node.amount - (node.paid_amount || 0),
-          paidDate: node.actual_date,
-          plannedDate: node.planned_date,
-          status: node.status,
-          trigger: node.trigger,
-          formula_expr: node.formula_expr,
-        });
-      });
-    });
-    return list;
+const statusTag = (status: string) => {
+  const map: Record<string, { color: string; text: string }> = {
+    pending: { color: "processing", text: "待确认" },
+    confirmed: { color: "success", text: "已确认" },
+    rejected: { color: "error", text: "已驳回" },
+  };
+  const m = map[status] ?? { color: "default", text: status };
+  return <Tag color={m.color}>{m.text}</Tag>;
+};
+
+// ═══════════════════════════════════════════════════════════════════
+
+export default function PaymentLedger() {
+  // ── 筛选 ──
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [contractId, setContractId] = useState<string | null>(null);
+  const [year, setYear] = useState<number | undefined>(undefined);
+
+  // ── 台账数据 ──
+  const [ledger, setLedger] = useState<PaymentLedgerGroup[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // ── 报送弹窗 ──
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [stages, setStages] = useState<PaymentStage[]>([]);
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+  const [reportedAmount, setReportedAmount] = useState<number>(0);
+  const [creating, setCreating] = useState(false);
+
+  // ── 驳回弹窗 ──
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectPaymentId, setRejectPaymentId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  // ── 加载项目列表 ──
+  useEffect(() => {
+    getProjects({ page: 1, page_size: 100 })
+      .then((res) => {
+        const list = res.items ?? res ?? [];
+        setProjects(list);
+        if (list.length > 0 && !projectId) setProjectId(list[0].id);
+      })
+      .catch(() => {});
   }, []);
 
-  let filtered = allPayments;
-  if (filterContract !== "all") filtered = filtered.filter((p) => p.contractId === filterContract);
-  if (filterStatus !== "all") filtered = filtered.filter((p) => p.status === filterStatus);
-  if (filterFeeType !== "all") filtered = filtered.filter((p) => p.feeType === filterFeeType);
+  // ── 项目变更 → 加载合同列表 ──
+  useEffect(() => {
+    if (!projectId) { setContracts([]); setContractId(null); return; }
+    getContractGroups(projectId)
+      .then((groups) => {
+        const all = groups.flatMap((g) => g.contracts);
+        setContracts(all);
+        if (all.length > 0 && !contractId) setContractId(all[0].id);
+      })
+      .catch(() => message.error("加载合同列表失败"));
+  }, [projectId]);
 
-  const totalDue = filtered.reduce((s, p) => s + p.dueAmount, 0);
-  const totalPaid = filtered.filter((p) => p.status === "paid").reduce((s, p) => s + p.paidAmount, 0);
-  const totalUnpaid = filtered.filter((p) => p.status !== "paid").reduce((s, p) => s + p.remainingAmount, 0);
-  const overdueCount = filtered.filter((p) => p.status === "overdue").length;
+  // ── 合同/年份变更 → 加载支付台账 ──
+  useEffect(() => {
+    if (!contractId) { setLedger([]); return; }
+    setLoading(true);
+    getContractPayments(contractId, year)
+      .then(setLedger)
+      .catch(() => message.error("加载支付台账失败"))
+      .finally(() => setLoading(false));
+  }, [contractId, year]);
 
-  const markPaid = (node: any) => {
-    setPayingNode(node);
-    setPayModalOpen(true);
+  // ── 统计数据 ──
+  const stats = useMemo(() => {
+    let totalReported = 0;
+    let totalApproved = 0;
+    let pendingCount = 0;
+    let confirmedCount = 0;
+    for (const group of ledger) {
+      totalReported += group.month_total_reported;
+      totalApproved += group.month_total_approved;
+      for (const item of group.items) {
+        if (item.status === "pending") pendingCount++;
+        else if (item.status === "confirmed") confirmedCount++;
+      }
+    }
+    return { totalReported, totalApproved, pendingCount, confirmedCount };
+  }, [ledger]);
+
+  // ── 打开报送弹窗 ──
+  const openCreateModal = async () => {
+    if (!contractId) return;
+    setCreateModalOpen(true);
+    setSelectedStageId(null);
+    setReportedAmount(0);
+    try {
+      const nodes = await getContractNodes(contractId);
+      setStages(nodes);
+    } catch {
+      message.error("加载支付节点失败");
+    }
   };
 
-  const confirmPay = () => {
-    message.success(`已标记支付：${payingNode?.nodeName}（${payingNode?.contractName}）`);
-    setPayModalOpen(false);
+  // ── 提交报送 ──
+  const submitCreate = async () => {
+    if (!contractId || !selectedStageId || reportedAmount <= 0) {
+      message.warning("请选择节点并填写报送金额");
+      return;
+    }
+    setCreating(true);
+    try {
+      await createPayment(contractId, {
+        stage_id: selectedStageId,
+        reported_amount: Math.round(reportedAmount * 100), // 元 → 分
+      });
+      message.success("报送成功");
+      setCreateModalOpen(false);
+      const data = await getContractPayments(contractId, year);
+      setLedger(data);
+    } catch {
+      message.error("报送失败");
+    } finally {
+      setCreating(false);
+    }
   };
 
+  // ── 确认批准 ──
+  const handleConfirm = async (paymentId: string) => {
+    if (!contractId) return;
+    try {
+      await confirmPayment(contractId, paymentId);
+      message.success("已确认");
+      const data = await getContractPayments(contractId, year);
+      setLedger(data);
+    } catch {
+      message.error("确认失败");
+    }
+  };
+
+  // ── 打开驳回弹窗 ──
+  const openRejectModal = (paymentId: string) => {
+    setRejectPaymentId(paymentId);
+    setRejectReason("");
+    setRejectModalOpen(true);
+  };
+
+  // ── 提交驳回 ──
+  const submitReject = async () => {
+    if (!contractId || !rejectPaymentId || !rejectReason.trim()) {
+      message.warning("请填写驳回原因");
+      return;
+    }
+    try {
+      await rejectPayment(contractId, rejectPaymentId, { reject_reason: rejectReason });
+      message.success("已驳回");
+      setRejectModalOpen(false);
+      const data = await getContractPayments(contractId, year);
+      setLedger(data);
+    } catch {
+      message.error("驳回失败");
+    }
+  };
+
+  // ── 台账表格列 ──
   const columns = [
-    { title: "节点", dataIndex: "nodeName", width: 100 },
-    { title: "合同", dataIndex: "contractName", width: 140, ellipsis: true },
-    { title: "承接单位", dataIndex: "contractor", width: 110, ellipsis: true },
-    { title: "项目", dataIndex: "project", width: 120, ellipsis: true },
-    { title: "费用类型", dataIndex: "feeType", width: 80, render: (v: string) => <Tag color="blue">{v}</Tag> },
-    { title: "应付(元)", dataIndex: "dueAmount", width: 110, align: "right" as const,
-      render: (v: number) => <Text strong>¥{formatYuan(v)}</Text> },
-    { title: "已付(元)", dataIndex: "paidAmount", width: 110, align: "right" as const,
-      render: (v: number) => v > 0 ? <Text style={{ color: "#52c41a" }}>¥{formatYuan(v)}</Text> : <Text type="secondary">—</Text> },
-    { title: "未付(元)", dataIndex: "remainingAmount", width: 110, align: "right" as const,
-      render: (v: number, r: any) => {
-        if (r.status === "paid") return <Text type="secondary">—</Text>;
-        return <Text style={{ color: r.status === "overdue" ? "#ff4d4f" : "#fa8c16" }}>¥{formatYuan(v)}</Text>;
-      }},
-    { title: "计划日期", dataIndex: "plannedDate", width: 100 },
-    { title: "触发条件", dataIndex: "trigger", width: 130, ellipsis: true },
-    { title: "公式", dataIndex: "formula_expr", width: 120, render: (v: string) => <Tag color="blue">{v}</Tag> },
-    { title: "状态", dataIndex: "status", width: 85, render: (v: string) => <Tag color={STATUS_MAP[v]?.color}>{STATUS_MAP[v]?.text}</Tag> },
+    { title: "节点", dataIndex: "stage_name", width: 120, render: (v: string | null) => v || "—" },
+    { title: "合同编号", dataIndex: "contract_no", width: 130 },
+    { title: "供应商", dataIndex: "supplier_name", width: 130, ellipsis: true,
+      render: (v: string | null) => v || "—" },
+    { title: "报送金额(元)", dataIndex: "reported_amount", width: 130, align: "right" as const,
+      render: (v: number) => <Text strong>¥{fenToYuan(v)}</Text> },
+    { title: "批准金额(元)", dataIndex: "approved_amount", width: 130, align: "right" as const,
+      render: (v: number) => v > 0
+        ? <Text style={{ color: "#52c41a" }}>¥{fenToYuan(v)}</Text>
+        : <Text type="secondary">—</Text> },
+    { title: "状态", dataIndex: "status", width: 85, render: (v: string) => statusTag(v) },
+    { title: "确认时间", dataIndex: "confirmed_at", width: 160,
+      render: (v: string | null) => v ? dayjs(v).format("YYYY-MM-DD HH:mm") : "—" },
+    { title: "驳回原因", dataIndex: "reject_reason", width: 140, ellipsis: true,
+      render: (v: string | null) => v
+        ? <Tooltip title={v}><Text type="danger" ellipsis>{v}</Text></Tooltip>
+        : "—" },
     {
-      title: "操作", width: 80, render: (_: any, r: any) => (
-        r.status !== "paid"
-          ? <a onClick={() => markPaid(r)}><CheckCircleOutlined /> 支付</a>
-          : <Text type="secondary">已付</Text>
-      ),
+      title: "操作", width: 140, fixed: "right" as const,
+      render: (_: unknown, r: PaymentResponse) => {
+        if (r.status === "pending") {
+          return (
+            <Space size={0}>
+              <Popconfirm
+                title="确认批准该笔支付？"
+                description="确认后金额将锁定，不可修改。"
+                onConfirm={() => handleConfirm(r.id)}
+                okText="确认批准"
+                cancelText="取消"
+              >
+                <Button size="small" type="link" icon={<CheckCircleOutlined />}
+                  style={{ color: "#52c41a" }}>
+                  确认
+                </Button>
+              </Popconfirm>
+              <Button size="small" type="link" danger icon={<CloseCircleOutlined />}
+                onClick={() => openRejectModal(r.id)}>
+                驳回
+              </Button>
+            </Space>
+          );
+        }
+        return <Text type="secondary">—</Text>;
+      },
     },
   ];
 
+  // ── 选中的合同对象（用于展示） ──
+  const selectedContract = contracts.find((c) => c.id === contractId);
+
+  // ── Render ──
   return (
     <div>
-      {/* 统计卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        {[
-          { title: "应付总额", val: `¥${formatYuan(totalDue)}`, color: "#1677ff" },
-          { title: "已支付", val: `¥${formatYuan(totalPaid)}`, color: "#52c41a" },
-          { title: "未支付", val: `¥${formatYuan(totalUnpaid)}`, color: "#fa8c16" },
-          { title: "逾期未付", val: overdueCount, color: "#ff4d4f", suffix: "笔" },
-        ].map((s, i) => (
-          <Col xs={12} sm={6} key={i}>
-            <Card size="small">
-              <Statistic title={s.title} value={s.val} suffix={s.suffix} valueStyle={{ color: s.color, fontSize: 20 }} />
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
-      {/* 筛选 + 操作 */}
+      {/* ═══ 筛选栏 + 统计 ═══ */}
       <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={12} align="middle">
-          <Col>
-            <Select style={{ width: 200 }} value={filterContract} onChange={setFilterContract}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {/* 项目 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "1 1 160px", minWidth: 0 }}>
+            <span style={{ whiteSpace: "nowrap", color: "#666", fontSize: 13 }}>项目</span>
+            <Select
+              style={{ flex: 1, minWidth: 0 }}
+              value={projectId}
+              onChange={(v) => { setProjectId(v); setContractId(null); }}
+              options={projects.map((p) => ({ value: p.id, label: p.project_name }))}
+              placeholder="选择项目"
+            />
+          </div>
+          {/* 合同 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "2 1 220px", minWidth: 0 }}>
+            <span style={{ whiteSpace: "nowrap", color: "#666", fontSize: 13 }}>合同</span>
+            <Select
+              style={{ flex: 1, minWidth: 0 }}
+              value={contractId}
+              onChange={(v) => { setContractId(v); setLedger([]); }}
+              options={contracts.map((c) => ({
+                value: c.id,
+                label: `${c.contract_no} — ${c.supplier_name}`,
+              }))}
               placeholder="选择合同"
-              options={[{ value: "all", label: "全部合同" }, ...mockSecondaryContracts.map(c => ({ value: c.id, label: c.contract_name }))]} />
-          </Col>
-          <Col>
-            <Select style={{ width: 120 }} value={filterStatus} onChange={setFilterStatus}
-              options={[{ value: "all", label: "全部状态" }, { value: "paid", label: "已支付" }, { value: "overdue", label: "逾期未付" }, { value: "pending", label: "未到期" }]} />
-          </Col>
-          <Col>
-            <Select style={{ width: 120 }} value={filterFeeType} onChange={setFilterFeeType}
-              options={[{ value: "all", label: "全部类型" }, ...mockFeeTypes.map(t => ({ value: t, label: t }))]} />
-          </Col>
-          <Col flex="auto" />
-          <Col>
-            <Button icon={<ExportOutlined />} onClick={() => setReconOpen(true)}>对账报告</Button>
-          </Col>
+            />
+          </div>
+          {/* 年份 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "0 0 140px" }}>
+            <span style={{ whiteSpace: "nowrap", color: "#666", fontSize: 13 }}>年份</span>
+            <Select
+              style={{ minWidth: 90 }}
+              allowClear
+              placeholder="全部"
+              value={year}
+              onChange={setYear}
+              options={Array.from({ length: 5 }, (_, i) => {
+                const y = dayjs().year() - 2 + i;
+                return { value: y, label: `${y}年` };
+              })}
+            />
+          </div>
+          {/* 报送按钮 — 右对齐 */}
+          <div style={{ marginLeft: "auto" }}>
+            <Button type="primary" icon={<PlusOutlined />}
+              disabled={!contractId} onClick={openCreateModal}>
+              报送支付
+            </Button>
+          </div>
+        </div>
+
+        {/* ── 分割线 + 统计 ── */}
+        <Divider style={{ margin: "12px 0 8px" }} />
+        <Row gutter={[16, 8]}>
+          {[
+            { title: "报送总额", value: `¥${fenToYuan(stats.totalReported)}`, color: "#1677ff" },
+            { title: "批准总额", value: `¥${fenToYuan(stats.totalApproved)}`, color: "#52c41a" },
+            { title: "待确认", value: stats.pendingCount, color: "#faad14", suffix: "笔" },
+            { title: "已确认", value: stats.confirmedCount, color: "#52c41a", suffix: "笔" },
+          ].map((s, i) => (
+            <Col xs={12} sm={6} md={3} key={i}>
+              <Statistic
+                title={s.title}
+                value={s.value}
+                suffix={s.suffix}
+                valueStyle={{ color: s.color, fontSize: 18, fontWeight: 600 }}
+              />
+            </Col>
+          ))}
         </Row>
       </Card>
 
-      {/* 支付台账表格 */}
-      <Card title={`支付台账（${filtered.length} 条）`}>
-        <Table size="small" rowKey="id" dataSource={filtered} columns={columns}
-          pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条记录` }}
-          scroll={{ x: 1300 }} />
+      {/* ═══ 按月分组台账 ═══ */}
+      <Card
+        title={
+          <Space size={4}>
+            <span style={{ fontWeight: 600 }}>支付台账</span>
+            {selectedContract && (
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                {selectedContract.contract_no} — {selectedContract.supplier_name}
+              </Text>
+            )}
+            {!loading && ledger.length > 0 && (
+              <Tag style={{ marginLeft: 4 }}>
+                {ledger.reduce((s, g) => s + g.items.length, 0)} 条
+              </Tag>
+            )}
+          </Space>
+        }
+        loading={loading}
+        bodyStyle={!contractId || ledger.length === 0 ? undefined : { padding: 0 }}
+      >
+        {!contractId ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "#999" }}>
+            请先选择项目和合同
+          </div>
+        ) : ledger.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "#999" }}>
+            暂无支付记录
+            <br />
+            <Button type="link" icon={<PlusOutlined />} onClick={openCreateModal}
+              style={{ marginTop: 8 }}>
+              报送第一笔支付
+            </Button>
+          </div>
+        ) : (
+          <Collapse
+            size="small"
+            bordered={false}
+            defaultActiveKey={ledger.filter((g) => g.month === "未确认").map((g) => g.month)}
+            items={ledger.map((group) => ({
+              key: group.month,
+              label: (
+                <Space size={8}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>
+                    {group.month === "未确认" ? "⏳ 未确认" : `${group.month}`}
+                  </span>
+                  <Tag color={group.month === "未确认" ? "warning" : "blue"}>
+                    {group.items.length} 笔
+                  </Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    报送 ¥{fenToYuan(group.month_total_reported)}
+                    &nbsp;|&nbsp;批准 ¥{fenToYuan(group.month_total_approved)}
+                  </Text>
+                </Space>
+              ),
+              children: (
+                <div style={{ padding: 0 }}>
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    dataSource={group.items}
+                    columns={columns}
+                    pagination={false}
+                    scroll={{ x: 1000 }}
+                  />
+                </div>
+              ),
+            }))}
+          />
+        )}
       </Card>
 
-      {/* 支付登记弹窗 */}
+      {/* ═══ 报送弹窗 ═══ */}
       <Modal
-        title="登记支付"
-        open={payModalOpen}
-        onCancel={() => setPayModalOpen(false)}
-        onOk={confirmPay}
-        okText="确认支付"
-        width={480}
+        title="报送支付"
+        open={createModalOpen}
+        width={500}
+        onCancel={() => setCreateModalOpen(false)}
+        onOk={submitCreate}
+        confirmLoading={creating}
+        okText="提交报送"
+        destroyOnClose
       >
-        {payingNode && (
-          <div>
-            <Row gutter={[0, 12]}>
-              <Col span={12}><Text type="secondary">节点：</Text><Text strong>{payingNode.nodeName}</Text></Col>
-              <Col span={12}><Text type="secondary">合同：</Text><Text strong>{payingNode.contractName}</Text></Col>
-              <Col span={12}><Text type="secondary">承接单位：</Text><Text>{payingNode.contractor}</Text></Col>
-              <Col span={12}><Text type="secondary">费用类型：</Text><Tag color="blue">{payingNode.feeType}</Tag></Col>
-              <Col span={12}><Text type="secondary">应付金额：</Text><Text strong style={{ fontSize: 16 }}>¥{formatYuan(payingNode.dueAmount)}</Text></Col>
-              <Col span={12}><Text type="secondary">未付金额：</Text><Text strong style={{ fontSize: 16, color: "#fa8c16" }}>¥{formatYuan(payingNode.remainingAmount)}</Text></Col>
-            </Row>
-            <div style={{ marginTop: 20, padding: 16, background: "#f6f8fa", borderRadius: 6 }}>
-              <Row gutter={12}>
-                <Col span={12}>
-                  <div style={{ marginBottom: 4, fontWeight: 500 }}>本次支付金额（元）</div>
-                  <InputNumber style={{ width: "100%" }} min={0} max={payingNode.remainingAmount / 100}
-                    placeholder="输入本次支付金额"
-                    formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                    parser={(v: any) => v.replace(/,/g, "")} />
-                </Col>
-                <Col span={12}>
-                  <div style={{ marginBottom: 4, fontWeight: 500 }}>支付日期</div>
-                  <DatePicker style={{ width: "100%" }} />
-                </Col>
-              </Row>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ marginBottom: 4, fontWeight: 500 }}>支付凭证</div>
-                <Input placeholder="凭证编号或说明" />
-              </div>
-            </div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 6, fontWeight: 500 }}>支付节点</div>
+          <Select
+            style={{ width: "100%" }}
+            placeholder="请选择支付节点"
+            value={selectedStageId}
+            onChange={setSelectedStageId}
+            options={stages.map((s) => ({
+              value: s.id,
+              label: `${s.stage_name}${s.node_name ? ` - ${s.node_name}` : ""}${s.agreed_amount ? ` (¥${fenToYuan(s.agreed_amount)})` : ""}`,
+            }))}
+          />
+        </div>
+        <div>
+          <div style={{ marginBottom: 6, fontWeight: 500 }}>报送金额（元）</div>
+          <InputNumber
+            style={{ width: "100%" }}
+            min={0}
+            precision={2}
+            placeholder="请输入报送金额"
+            value={reportedAmount}
+            onChange={(v) => setReportedAmount(v ?? 0)}
+          />
+          <div style={{ marginTop: 8, fontSize: 12, color: "#999" }}>
+            系统将自动计算批准金额（不超过节点剩余额度）
           </div>
-        )}
+        </div>
       </Modal>
 
-      {/* 对账报告弹窗 */}
+      {/* ═══ 驳回弹窗 ═══ */}
       <Modal
-        title="合同-节点-支付对账报告"
-        width={900}
-        open={reconOpen}
-        onCancel={() => setReconOpen(false)}
-        onOk={() => { message.success("对账报告导出成功"); setReconOpen(false); }}
-        okText="导出 Excel"
+        title="驳回支付"
+        open={rejectModalOpen}
+        width={420}
+        onCancel={() => { setRejectModalOpen(false); setRejectPaymentId(null); }}
+        onOk={submitReject}
+        okText="确认驳回"
+        okButtonProps={{ danger: true }}
+        destroyOnClose
       >
-        {mockSecondaryContracts.map((contract) => {
-          const nodes = mockPaymentNodes[contract.id] || [];
-          const contractPaid = nodes.filter((n) => n.status === "paid").reduce((s, n) => s + n.paid_amount, 0);
-          const contractUnpaid = nodes.filter((n) => n.status !== "paid").reduce((s, n) => s + n.amount, 0);
-          const paidRatio = contract.contract_amount > 0 ? Math.round(contractPaid / contract.contract_amount * 100) : 0;
-          return (
-            <Card
-              key={contract.id}
-              size="small"
-              title={
-                <Space>
-                  <Text strong>{contract.contract_name}</Text>
-                  <Tag color="blue">{contract.fee_type}</Tag>
-                  <Text type="secondary">— {contract.contractor}</Text>
-                  <Tag color={contract.status === "active" ? "green" : "red"}>
-                    {contract.status === "active" ? "生效中" : contract.status === "terminated" ? "已终止" : "已到期"}
-                  </Tag>
-                </Space>
-              }
-              style={{ marginBottom: 16 }}
-            >
-              <Row gutter={16} style={{ marginBottom: 12 }}>
-                <Col><Text type="secondary">合同总额：</Text><Text strong>¥{formatYuan(contract.contract_amount)}</Text></Col>
-                <Col><Text type="secondary">已支付：</Text><Text style={{ color: "#52c41a" }}>¥{formatYuan(contractPaid)}</Text></Col>
-                <Col><Text type="secondary">未支付：</Text><Text style={{ color: "#fa8c16" }}>¥{formatYuan(contractUnpaid)}</Text></Col>
-                <Col><Text type="secondary">支付比例：</Text><Text>{paidRatio}%</Text></Col>
-              </Row>
-              {nodes.length > 0 ? (
-                <Table size="small" pagination={false} rowKey="id" dataSource={nodes}
-                  columns={[
-                    { title: "#", dataIndex: "seq", width: 40 },
-                    { title: "节点", dataIndex: "name", width: 80 },
-                    { title: "公式", dataIndex: "formula_expr", width: 130, render: (v: string) => <Tag color="blue">{v}</Tag> },
-                    { title: "应付(元)", dataIndex: "amount", width: 100, align: "right" as const, render: (v: number) => `¥${formatYuan(v)}` },
-                    { title: "实付(元)", dataIndex: "paid_amount", width: 100, align: "right" as const, render: (v: number) => v > 0 ? `¥${formatYuan(v)}` : "—" },
-                    { title: "计划日期", dataIndex: "planned_date", width: 100 },
-                    { title: "实际日期", dataIndex: "actual_date", width: 100, render: (v: string | null) => v || "—" },
-                    { title: "状态", dataIndex: "status", width: 80, render: (v: string) => <Tag color={STATUS_MAP[v]?.color}>{STATUS_MAP[v]?.text}</Tag> },
-                  ]}
-                />
-              ) : (
-                <Text type="secondary">未配置支付节点</Text>
-              )}
-            </Card>
-          );
-        })}
+        <div style={{ marginBottom: 8 }}>
+          <Text type="secondary">请输入驳回原因：</Text>
+        </div>
+        <Input.TextArea
+          rows={3}
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          placeholder="如：金额与合同约定不符"
+          maxLength={200}
+          showCount
+        />
       </Modal>
     </div>
   );

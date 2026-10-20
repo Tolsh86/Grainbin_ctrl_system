@@ -11,7 +11,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import UUIDMixin, TimestampMixin, SoftDeleteMixin, Base
@@ -33,7 +33,7 @@ class Contract(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         Integer, nullable=False, comment="行序号"
     )
     contract_no: Mapped[str] = mapped_column(
-        String(20), unique=True, nullable=False, index=True, comment="合同编号（CX001~CX018，业务主键）"
+        String(20), nullable=False, index=True, comment="合同编号（CX001~CX018），同项目下 contract_no+sub_type 联合唯一"
     )
     supplier_name: Mapped[str] = mapped_column(
         String(200), nullable=False, comment="供应商/承包单位名称"
@@ -56,6 +56,19 @@ class Contract(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="active",
         comment="状态：active(执行中)/expired(已到期)/terminated(已终止)"
+    )
+
+    # ── 第二阶段新增字段 ──
+    contract_group: Mapped[str | None] = mapped_column(
+        String(50), comment="合同编号组，用于归组同项目下多份独立合同"
+    )
+    review_mode: Mapped[str | None] = mapped_column(
+        String(20), default="daily_aggregate",
+        comment="审核模式：daily_aggregate(日报聚合)/node_judge(节点判断)/none(无产值)"
+    )
+    ledger_group: Mapped[str | None] = mapped_column(
+        String(20), default="service",
+        comment="台账分组：construction(建安合计)/equipment(设备合计)/service(二类费用合计)/none(不计入台账)"
     )
 
     # ── 关系 ──
@@ -114,6 +127,17 @@ class ContractPaymentStage(Base, UUIDMixin, TimestampMixin):
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), comment="完成时间"
+    )
+
+    # ── 第二阶段新增字段 ──
+    triggered_at: Mapped[date | None] = mapped_column(
+        Date, comment="节点触发时间。咨询类合同节点达到后填入当月，下月查询时排除已触发的节点"
+    )
+    reported_amount: Mapped[int | None] = mapped_column(
+        BigInteger, default=0, comment="累计报送产值（施工方报送，单位：分）"
+    )
+    reviewed_amount: Mapped[int | None] = mapped_column(
+        BigInteger, default=0, comment="累计审定产值（过控审定，单位：分）"
     )
 
     # ── 汇总数据 (仅在 stage_order=0 时有意义) ──
@@ -185,6 +209,17 @@ class ContractMonthlyDetail(Base, UUIDMixin):
     )
     remaining_ratio: Mapped[float | None] = mapped_column(
         Numeric(8, 4), comment="剩余未完比例"
+    )
+
+    # ── 第二阶段新增字段 ──
+    source: Mapped[str] = mapped_column(
+        String(20), default="auto", comment="数据来源：auto(系统汇总)/manual(人工审定)"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending", comment="确认状态：pending/confirmed"
+    )
+    cost_items_detail: Mapped[dict | None] = mapped_column(
+        JSONB, comment="分项级产值明细 {items: [{fee_item_id, name, output, ratio, payable}]}"
     )
 
     created_at: Mapped[datetime] = mapped_column(

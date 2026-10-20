@@ -6,37 +6,23 @@ import {
   DatabaseOutlined,
   FileTextOutlined,
   AuditOutlined,
-  RobotOutlined,
   ProjectOutlined,
   BellOutlined,
   UserOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  SettingOutlined,
   DollarOutlined,
-  BookOutlined,
-  FundOutlined,
 } from "@ant-design/icons";
 import { useAuthStore } from "../store/auth";
 
 const { Header, Sider, Content } = Layout;
 
-// 菜单顺序：工作台 → 驾驶舱 → 项目中心 → 数据中心 → 报告中心 → 审核中心 → 二类费用 → 知识库 → AI分析 → 系统管理
+// 菜单顺序：工作台 → 项目中心 → 数据中心 → 报告中心 → 审核工作台 → 支付台账
 const menuItems = [
   {
     key: "/dashboard",
     icon: <DashboardOutlined />,
     label: "工作台",
-  },
-  {
-    key: "cockpit-group",
-    icon: <FundOutlined />,
-    label: "驾驶舱",
-    children: [
-      { key: "/cockpit/overview", label: "项目总览" },
-      { key: "/cockpit/scurve", label: "S 曲线" },
-      { key: "/cockpit/investment", label: "投资分析" },
-    ],
   },
   {
     key: "project-group",
@@ -53,10 +39,6 @@ const menuItems = [
     children: [
       { key: "/data/upload", label: "数据上传" },
       { key: "/data/batches", label: "批次管理" },
-      { key: "/data/list", label: "数据列表" },
-      { key: "/data/compare", label: "数据对比" },
-      { key: "/data/mapping", label: "字段映射" },
-      { key: "/data/errors", label: "错误中心" },
     ],
   },
   {
@@ -69,54 +51,24 @@ const menuItems = [
     ],
   },
   {
-    key: "audit-group",
+    key: "review-group",
     icon: <AuditOutlined />,
-    label: "审核中心",
+    label: "审核工作台",
     children: [
-      { key: "/audits", label: "审核列表" },
-      { key: "/audits/upload", label: "上传审核" },
+      { key: "/secondary/audit", label: "审核工作台" },
+      { key: "/secondary/monthly", label: "月度台账" },
     ],
   },
   {
-    key: "secondary-group",
+    key: "payment-group",
     icon: <DollarOutlined />,
-    label: "二类费用",
+    label: "支付台账",
     children: [
       { key: "/secondary/contracts", label: "合同管理" },
       { key: "/secondary/nodes", label: "节点管理" },
       { key: "/secondary/payments", label: "支付台账" },
-    ],
-  },
-  {
-    key: "knowledge-group",
-    icon: <BookOutlined />,
-    label: "知识库",
-    children: [
-      { key: "/knowledge/docs", label: "文档管理" },
-      { key: "/knowledge/chat", label: "AI 问答" },
-    ],
-  },
-  {
-    key: "ai-group",
-    icon: <RobotOutlined />,
-    label: "AI 分析中心",
-    children: [
-      { key: "/ai/trend", label: "趋势分析" },
-      { key: "/ai/risk", label: "风险检测" },
-      { key: "/ai/summary", label: "智能摘要" },
-      { key: "/ai/qa", label: "智能提问" },
-    ],
-  },
-  {
-    key: "system-group",
-    icon: <SettingOutlined />,
-    label: "系统管理",
-    children: [
-      { key: "/system/users", label: "用户管理" },
-      { key: "/system/roles", label: "角色管理" },
-      { key: "/system/permissions", label: "权限管理" },
-      { key: "/system/menus", label: "菜单管理" },
-      { key: "/system/logs", label: "日志管理" },
+      { key: "/secondary/payment-matrix", label: "月度总览" },
+      { key: "/secondary/node-templates", label: "节点模板" },
     ],
   },
 ];
@@ -144,6 +96,18 @@ export default function MainLayout() {
 
   const getOpenKeys = () => {
     const path = location.pathname;
+    // 审核工作台子路由
+    if (path.startsWith("/secondary/audit") || path.startsWith("/audits") || path.startsWith("/secondary/monthly")) {
+      return ["review-group"];
+    }
+    // 支付台账子路由
+    if (path.startsWith("/secondary/contracts") || path.startsWith("/secondary/nodes") ||
+        path.startsWith("/secondary/payments") || path.startsWith("/secondary/payment-matrix") ||
+        path.startsWith("/secondary/node-templates") ||
+        path.startsWith("/contracts/")) {
+      return ["payment-group"];
+    }
+    // 其他模块保持原逻辑
     const parts = path.split("/");
     if (parts.length >= 2) {
       const groupKey = `${parts[1]}-group`;
@@ -191,7 +155,7 @@ export default function MainLayout() {
               whiteSpace: "nowrap",
             }}
           >
-            {collapsed ? "GCS" : "粮仓过控智能平台"}
+            {collapsed ? "XTH" : "兴天华过控智能平台"}
           </h2>
         </div>
         <div
@@ -259,7 +223,7 @@ export default function MainLayout() {
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <Space style={{ cursor: "pointer" }}>
                 <Avatar icon={<UserOutlined />} />
-                <span>{user?.full_name ?? "管理员"}</span>
+                <span>{user?.real_name ?? "管理员"}</span>
               </Space>
             </Dropdown>
           </Space>

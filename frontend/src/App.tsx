@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import AuthGuard from "./components/AuthGuard";
 import MainLayout from "./components/MainLayout";
+import AuthGuard from "./components/AuthGuard";
 import Login from "./pages/login/index";
 import Dashboard from "./pages/dashboard/index";
 // 项目管理
@@ -20,16 +20,19 @@ import ReportList from "./pages/report/index";
 import ReportEdit from "./pages/report/edit";
 import TemplateList from "./pages/report/templates";
 import TemplateEdit from "./pages/report/template-edit";
-// 审核中心
+// 审核工作台（一类费用）
 import AuditList from "./pages/audit/index";
 import AuditUpload from "./pages/audit/upload";
 import AuditDetail from "./pages/audit/detail";
-// 二类费用
+import AuditWorkbench from "./pages/secondary/audit";
+import MonthlyLedger from "./pages/secondary/monthly";
+// 支付台账（二类费用）
 import ContractsList from "./pages/secondary/contracts";
 import NodeTemplates from "./pages/secondary/node-templates";
 import NodeManagement from "./pages/secondary/nodes";
 import PaymentLedger from "./pages/secondary/payments";
-import ReminderSettings from "./pages/secondary/reminder";
+import PaymentMatrixOverview from "./pages/secondary/payment-matrix";
+import FeeItemsConfig from "./pages/secondary/fee-items";
 // 知识库
 import KnowledgeDocs from "./pages/knowledge/docs";
 import AIChat from "./pages/knowledge/chat";
@@ -56,13 +59,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
 
       {/* 受保护的路由 - 使用 MainLayout 包裹 */}
-      <Route
-        element={
-          <AuthGuard>
-            <MainLayout />
-          </AuthGuard>
-        }
-      >
+      <Route element={<AuthGuard><MainLayout /></AuthGuard>}>
         {/* 工作台 */}
         <Route path="/dashboard" element={<Dashboard />} />
 
@@ -87,17 +84,20 @@ export default function App() {
         <Route path="/reports/templates" element={<TemplateList />} />
         <Route path="/reports/templates/:id/edit" element={<TemplateEdit />} />
 
-        {/* 审核中心 */}
+        {/* 审核工作台（一类费用） */}
         <Route path="/audits" element={<AuditList />} />
         <Route path="/audits/upload" element={<AuditUpload />} />
         <Route path="/audits/:id" element={<AuditDetail />} />
+        <Route path="/secondary/audit" element={<AuditWorkbench />} />
+        <Route path="/secondary/monthly" element={<MonthlyLedger />} />
 
-        {/* 二类费用 */}
+        {/* 支付台账（二类费用） */}
         <Route path="/secondary/contracts" element={<ContractsList />} />
         <Route path="/secondary/node-templates" element={<NodeTemplates />} />
         <Route path="/secondary/nodes" element={<NodeManagement />} />
         <Route path="/secondary/payments" element={<PaymentLedger />} />
-        <Route path="/secondary/reminder" element={<ReminderSettings />} />
+        <Route path="/secondary/payment-matrix" element={<PaymentMatrixOverview />} />
+        <Route path="/contracts/:id/fee-items" element={<FeeItemsConfig />} />
 
         {/* 知识库 */}
         <Route path="/knowledge/docs" element={<KnowledgeDocs />} />

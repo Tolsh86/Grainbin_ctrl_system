@@ -35,6 +35,17 @@ class DataRow(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     amount: Mapped[int | None] = mapped_column(BigInteger, index=True, comment="金额（分）")
     cost_type: Mapped[str | None] = mapped_column(String(50), comment="费用类型（建安工程费/二类费用）")
 
+    # ── 第二阶段新增字段 ──
+    contract_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("t_contracts.id"), index=True, comment="关联合同"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), default="draft", comment="审核状态：draft/submitted/reviewed/rejected/confirmed"
+    )
+    cost_sub_type: Mapped[str | None] = mapped_column(
+        String(50), comment="费用分项类型：construction/safety_civilization/..."
+    )
+
     # ── 来源追踪 ──
     source_doc: Mapped[str | None] = mapped_column(String(500), comment="来源文档名称")
     source_type: Mapped[str | None] = mapped_column(String(30), comment="来源：施工方上报/过控审核/AI识别/系统计算")
@@ -47,6 +58,7 @@ class DataRow(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
 
     # ── 关系 ──
     project: Mapped["Project"] = relationship("Project", lazy="selectin")  # noqa: F821
+    contract: Mapped["Contract"] = relationship("Contract", lazy="selectin")  # noqa: F821
 
     def __repr__(self) -> str:
         return f"<DataRow {self.id} item={self.item_name} confirmed={self.is_confirmed}>"

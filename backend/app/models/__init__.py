@@ -18,6 +18,9 @@ from app.models.data_row import DataRow
 from app.models.contract import Contract, ContractPaymentStage, ContractMonthlyDetail
 from app.models.contract_payment import ContractPayment
 from app.models.progress_review import ProgressPaymentReview
+from app.models.reporting_period import ReportingPeriod, PeriodContract
+from app.models.contract_fee_item import ContractFeeItem
+from app.models.review_fee_item import ReviewFeeItem
 from app.models.weekly_progress import WeeklyProgressReport, WeeklyProgressMetrics
 from app.models.monthly_fund import MonthlyProvinceProgress, MonthlyTargetPlan, FundBreakdown
 
@@ -53,6 +56,8 @@ __all__ = [
     "Project", "DataRow",
     "Contract", "ContractPaymentStage", "ContractMonthlyDetail", "ContractPayment",
     "ProgressPaymentReview",
+    "ReportingPeriod", "PeriodContract",
+    "ContractFeeItem", "ReviewFeeItem",
     "WeeklyProgressReport", "WeeklyProgressMetrics",
     "MonthlyProvinceProgress", "MonthlyTargetPlan", "FundBreakdown",
     # 字典

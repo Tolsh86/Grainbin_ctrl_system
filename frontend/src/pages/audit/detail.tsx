@@ -1,149 +1,160 @@
-import { useState, useMemo } from "react";
-import { Card, Row, Col, Descriptions, Tag, Table, Button, Space, Input, InputNumber, message, Collapse, Alert, Statistic } from "antd";
-import { RobotOutlined, CheckCircleOutlined, CloseCircleOutlined, ExportOutlined } from "@ant-design/icons";
+import { useState, useEffect } from "react";
+import { Card, Row, Col, Descriptions, Tag, Button, Space, message, Spin, Table, Statistic, Divider } from "antd";
+import { ArrowLeftOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
-import ReactECharts from "echarts-for-react";
-import { mockAudits } from "../../utils/mock";
+import { getReview, updateReviewStatus, type Review, type ReviewFeeItem } from "../../api/reviews";
 
-const formatYuan = (fen: number) => (fen / 100).toLocaleString();
+const fenToWanStr = (fen: number | null | undefined): string => {
+  if (fen == null || fen === 0) return "0.0000";
+  return (fen / 1000000).toLocaleString("zh-CN", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+};
+
+const statusMap: Record<string, { color: string; text: string }> = {
+  draft: { color: "default", text: "草稿" },
+  submitted: { color: "blue", text: "已报送" },
+  reviewed: { color: "green", text: "已审定" },
+};
 
 export default function AuditDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const audit = mockAudits.find((a) => a.id === id);
-  const [aiRan, setAiRan] = useState(false);
-  const [adopted, setAdopted] = useState<Record<string, boolean>>({});
-  const [opinion, setOpinion] = useState("");
+  const [review, setReview] = useState<Review | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!audit) return <Card><p>审核不存在</p><Button onClick={() => navigate("/audits")}>返回</Button></Card>;
+  useEffect(() => {
+    if (!id) return;
+    getReview(id)
+      .then(setReview)
+      .catch(() => message.error("加载审核详情失败"))
+      .finally(() => setLoading(false));
+  }, [id]);
 
-  const handleRunAI = () => {
-    message.loading("AI 审核引擎运行中：重复计量/合同比对/付款比例/单价异常...", 2.5, () => { setAiRan(true); message.success("AI 审核完成，发现 2 项异常"); });
+  if (loading) return <Spin style={{ display: "block", marginTop: 80 }} />;
+  if (!review) return <Card><p>审核不存在</p><Button onClick={() => navigate("/audits")}>返回</Button></Card>;
+
+  const handleSubmit = async () => {
+    try {
+      const updated = await updateReviewStatus(review.id, { audit_status: "submitted" });
+      setReview(updated);
+      message.success("已报送");
+    } catch (e: any) { message.error(e?.response?.data?.detail || "操作失败"); }
   };
 
-  const handleAdopt = (findingId: string) => { setAdopted((p) => ({ ...p, [findingId]: true })); message.success("已采纳建议"); };
-  const handleReject = (findingId: string) => { setAdopted((p) => ({ ...p, [findingId]: false })); message.info("已拒绝建议"); };
-
-  const itemCols = [
-    { title: "分项", dataIndex: "name", key: "n", width: 120, fixed: "left" as const },
-    { title: "单位", dataIndex: "unit", key: "u", width: 60 },
-    { title: "申报数量", dataIndex: "apply_qty", key: "aq", width: 90, align: "right" as const },
-    { title: "申报单价", dataIndex: "apply_price", key: "ap", width: 90, align: "right" as const, render: (v: number) => v.toLocaleString() },
-    { title: "申报金额", dataIndex: "apply_amount", key: "aa", width: 110, align: "right" as const, render: (v: number) => `¥${v.toLocaleString()}` },
-    { title: "审核数量", dataIndex: "audit_qty", key: "dq", width: 90, align: "right" as const, render: (v: number, r: typeof audit.items[0]) => <InputNumber size="small" defaultValue={v} style={{ width: "100%" }} /> },
-    { title: "审核金额", dataIndex: "audit_amount", key: "da", width: 110, align: "right" as const, render: (v: number) => <span style={{ color: "#1677ff" }}>¥{v.toLocaleString()}</span> },
-    { title: "核减", dataIndex: "deduct", key: "dd", width: 90, align: "right" as const, render: (v: number) => v > 0 ? <span style={{ color: "#ff4d4f" }}>-¥{v.toLocaleString()}</span> : <span style={{ color: "#52c41a" }}>0</span> },
-    { title: "异常", dataIndex: "anomaly", key: "an", width: 80, render: (v: string | null) => v ? <Tag color="red">{v}</Tag> : <Tag color="green">正常</Tag> },
-  ];
-
-  const historyCompareOption = {
-    tooltip: { trigger: "axis" },
-    xAxis: { type: "category", data: ["第8期","第9期","第10期","第11期","第12期"] },
-    legend: { data: ["核减率(%)"] },
-    yAxis: { type: "value", name: "%" },
-    series: [{ name: "核减率(%)", type: "line", data: [3.8, 3.6, 4.7, 4.0, 4.8], smooth: true }],
+  const handleConfirm = async () => {
+    try {
+      const updated = await updateReviewStatus(review.id, { audit_status: "reviewed" });
+      setReview(updated);
+      message.success("已确认审定，已写入月度台账");
+    } catch (e: any) { message.error(e?.response?.data?.detail || "操作失败"); }
   };
+
+  const s = statusMap[review.audit_status] || { color: "default", text: review.audit_status };
+
+  // Calculate totals from fee_items
+  let totalReported = 0, totalReviewed = 0, totalPayable = 0;
+  (review.fee_items || []).forEach((fi) => {
+    totalReported += fi.reported_amount || 0;
+    totalReviewed += fi.reviewed_amount || 0;
+    totalPayable += (fi.reviewed_amount || 0) * (fi.payment_ratio || 0);
+  });
 
   return (
     <div>
-      {/* 页头 */}
       <Card size="small" style={{ marginBottom: 16 }}>
         <Row justify="space-between" align="middle">
           <Col>
-            <Space size="middle">
-              <Button type="text" onClick={() => navigate("/audits")}>← 返回</Button>
-              <span style={{ fontSize: 16, fontWeight: 600 }}>{audit.period} 进度款审核</span>
-              <Tag color="orange">待审核</Tag>
-              <span style={{ fontSize: 13 }}>合同: {audit.contract_name} <Tag>{audit.contract_version}</Tag></span>
+            <Space>
+              <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate("/audits")}>返回</Button>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>{review.review_type}</span>
+              <Tag color={s.color}>{s.text}</Tag>
             </Space>
           </Col>
           <Col>
             <Space>
-              {!aiRan && <Button icon={<RobotOutlined />} type="primary" ghost onClick={handleRunAI}>一键AI审核</Button>}
-              <Button icon={<ExportOutlined />} onClick={() => message.info("导出审核报告")}>导出报告</Button>
-              <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => message.success("提交终审")}>提交终审</Button>
+              {review.audit_status === "draft" && (
+                <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleSubmit}>报送审核</Button>
+              )}
+              {review.audit_status === "submitted" && (
+                <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleConfirm}>确认审定</Button>
+              )}
             </Space>
           </Col>
         </Row>
-        <Row gutter={16} style={{ marginTop: 12 }}>
-          <Col span={6}><Statistic title="申报金额" value={`¥${formatYuan(audit.apply_amount)}`} /></Col>
-          <Col span={6}><Statistic title="AI 建议" value={aiRan ? `¥${formatYuan(audit.ai_suggest_amount || 0)}` : "—"} valueStyle={{ color: "#1677ff" }} /></Col>
-          <Col span={6}><Statistic title="终审金额" value={audit.final_amount ? `¥${formatYuan(audit.final_amount)}` : "—"} /></Col>
-          <Col span={6}><Statistic title="核减金额" value={audit.deduct_amount ? `¥${formatYuan(audit.deduct_amount)}` : "—"} valueStyle={{ color: "#ff4d4f" }} /></Col>
-        </Row>
       </Card>
 
-      <Row gutter={16}>
-        {/* 左侧：工程量清单 */}
-        <Col span={16}>
-          <Card title="工程量清单明细" size="small">
-            <Table columns={itemCols} dataSource={audit.items} size="small" rowKey="id" scroll={{ x: 1000 }} pagination={false} />
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
+          <Card title="基本信息" size="small">
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="审核类型">{review.review_type}</Descriptions.Item>
+              <Descriptions.Item label="申请单位">{review.applicant_unit}</Descriptions.Item>
+              <Descriptions.Item label="申报日期">{review.submit_date || "—"}</Descriptions.Item>
+              <Descriptions.Item label="税率">{review.tax_rate != null ? `${review.tax_rate}%` : "—"}</Descriptions.Item>
+              <Descriptions.Item label="备注">{review.remark || "—"}</Descriptions.Item>
+            </Descriptions>
           </Card>
         </Col>
-        {/* 右侧：AI 审核结果 */}
-        <Col span={8}>
-          <Card title={<><RobotOutlined /> AI 审核结果</>} size="small">
-            {!aiRan ? (
-              <div style={{ textAlign: "center", padding: 32, color: "#999" }}>
-                <RobotOutlined style={{ fontSize: 32, marginBottom: 8 }} />
-                <p>点击"一键AI审核"启动 AI 分析</p>
-                <p style={{ fontSize: 11 }}>将自动检测：重复计量 / 合同单价比对 / 累计付款比例 / 单价异常</p>
-              </div>
-            ) : (
-              <div>
-                <Space style={{ marginBottom: 12 }}>
-                  <Button size="small" onClick={() => { audit.ai_findings?.forEach((f) => handleAdopt(f.item)); message.success("全部采纳"); }}>全部采纳</Button>
-                  <Button size="small" onClick={() => message.info("全部拒绝")}>全部拒绝</Button>
-                </Space>
-                {(audit.ai_findings || []).map((f, i) => (
-                  <Alert
-                    key={i}
-                    type="error"
-                    showIcon
-                    message={<strong>{f.type}：{f.item}</strong>}
-                    description={<div><p>建议核减：¥{formatYuan(f.suggest_deduct)}</p><p style={{ fontSize: 12 }}>{f.reason}</p></div>}
-                    style={{ marginBottom: 8 }}
-                    action={
-                      adopted[`${i}`] === undefined ? (
-                        <Space direction="vertical" size={4}>
-                          <Button size="small" type="primary" onClick={() => handleAdopt(`${i}`)}>采纳</Button>
-                          <Button size="small" onClick={() => handleReject(`${i}`)}>拒绝</Button>
-                        </Space>
-                      ) : adopted[`${i}`] ? <Tag color="green">已采纳</Tag> : <Tag color="default">已拒绝</Tag>
-                    }
-                  />
-                ))}
-                {audit.ai_findings?.length === 0 && <p style={{ color: "#52c41a" }}>✅ 未发现异常项</p>}
-              </div>
-            )}
+
+        <Col xs={24} lg={12}>
+          <Card title="金额汇总" size="small">
+            <Row gutter={16}>
+              <Col span={12}><Statistic title="合同金额(万元)" value={fenToWanStr(review.contract_amount)} /></Col>
+              <Col span={12}><Statistic title="累计报送产值(万元)" value={fenToWanStr(review.cumulative_reported_output)} /></Col>
+            </Row>
+            <Divider style={{ margin: "12px 0" }} />
+            <Row gutter={16}>
+              <Col span={8}><Statistic title="报送合计" value={fenToWanStr(totalReported)} /></Col>
+              <Col span={8}><Statistic title="审定合计" value={fenToWanStr(totalReviewed)} valueStyle={{ color: "#1677ff" }} /></Col>
+              <Col span={8}><Statistic title="应付合计" value={fenToWanStr(totalPayable)} valueStyle={{ color: "#cf1322" }} /></Col>
+            </Row>
           </Card>
         </Col>
       </Row>
 
-      {/* 底部审核意见 */}
-      <Card title="审核意见" size="small" style={{ marginTop: 16 }}>
-        <Input.TextArea rows={3} placeholder="审核意见（提交终审时必填）" value={opinion} onChange={(e) => setOpinion(e.target.value)} />
-        <div style={{ marginTop: 12, textAlign: "right" }}>
-          <Space>
-            <Button onClick={() => message.info("保存草稿")}>保存草稿</Button>
-            <Button type="primary" onClick={() => message.success("提交终审成功")}>提交终审</Button>
-            <Button danger onClick={() => message.warning("驳回")}>驳回</Button>
-          </Space>
-        </div>
+      {/* Fee items detail */}
+      <Card title="费用分项明细" size="small" style={{ marginTop: 16 }}>
+        <Table
+          size="small"
+          rowKey="id"
+          pagination={false}
+          dataSource={review.fee_items || []}
+          columns={[
+            { title: "分项名称", dataIndex: "item_name", width: 150 },
+            {
+              title: "付款比例", dataIndex: "payment_ratio", width: 100, align: "center" as const,
+              render: (v: number | null) => v != null ? `${(v * 100).toFixed(1)}%` : "—",
+            },
+            { title: "报送金额(万元)", dataIndex: "reported_amount", width: 130, align: "right" as const,
+              render: (v: number | null) => fenToWanStr(v) },
+            { title: "审定金额(万元)", dataIndex: "reviewed_amount", width: 130, align: "right" as const,
+              render: (v: number | null) => <span style={{ fontWeight: 600, color: "#1677ff" }}>{fenToWanStr(v)}</span> },
+            {
+              title: "应付金额(万元)", key: "payable", width: 130, align: "right" as const,
+              render: (_: any, fi: ReviewFeeItem) => {
+                const p = (fi.reviewed_amount || 0) * (fi.payment_ratio || 0);
+                return <span style={{ color: "#cf1322", fontWeight: 600 }}>{fenToWanStr(p)}</span>;
+              },
+            },
+            { title: "备注", dataIndex: "remark", ellipsis: true,
+              render: (v: string | null) => v || "—" },
+          ]}
+          summary={() => (
+            <Table.Summary fixed>
+              <Table.Summary.Row style={{ fontWeight: 700 }}>
+                <Table.Summary.Cell index={0} align="right" colSpan={2}>合计</Table.Summary.Cell>
+                <Table.Summary.Cell index={1} align="right">{fenToWanStr(totalReported)}</Table.Summary.Cell>
+                <Table.Summary.Cell index={2} align="right">
+                  <span style={{ color: "#1677ff" }}>{fenToWanStr(totalReviewed)}</span>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={3} align="right">
+                  <span style={{ color: "#cf1322" }}>{fenToWanStr(totalPayable)}</span>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={4} />
+              </Table.Summary.Row>
+            </Table.Summary>
+          )}
+        />
       </Card>
-
-      {/* 历期对比 */}
-      <Collapse style={{ marginTop: 16 }} items={[{
-        key: "history", label: "历期对比 ▼",
-        children: <Row gutter={16}>
-          <Col span={12}>
-            <Table size="small" pagination={false} dataSource={[{ period: "第10期", apply: 520000000, final: 498000000, deduct: 22000000, rate: 4.2 }, { period: "第11期", apply: 620000000, final: 595000000, deduct: 25000000, rate: 4.0 }, { period: "第12期", apply: 580000000, final: null, deduct: null, rate: null }]} columns={[{ title: "期次", dataIndex: "period" }, { title: "申报(万)", dataIndex: "apply", render: (v: number) => formatYuan(v) }, { title: "终审(万)", dataIndex: "final", render: (v: number | null) => v ? formatYuan(v) : "—" }, { title: "核减(万)", dataIndex: "deduct", render: (v: number | null) => v ? formatYuan(v) : "—" }, { title: "核减率", dataIndex: "rate", render: (v: number | null) => v ? `${v}%` : "—" }]} />
-          </Col>
-          <Col span={12}>
-            <Card size="small" title="核减率趋势"><ReactECharts option={historyCompareOption} style={{ height: 200 }} /></Card>
-          </Col>
-        </Row>
-      }]} />
     </div>
   );
 }

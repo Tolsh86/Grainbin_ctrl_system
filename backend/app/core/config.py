@@ -17,9 +17,13 @@ class Settings(BaseSettings):
     )
 
     # ── 应用 ───────────────────────────────
-    APP_NAME: str = "粮仓过控AI智能管理平台"
+    APP_NAME: str = "兴天华过控智能平台"
     DEBUG: bool = True
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # 本地开发可保留免登录；公网环境必须通过环境变量显式关闭。
+    AUTH_BYPASS_ENABLED: bool = True
+    # 公网演示仅使用预置管理员账号，不开放自助注册。
+    PUBLIC_REGISTRATION_ENABLED: bool = True
 
     # ── 数据库 ─────────────────────────────
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres123@localhost:5432/grainbin"

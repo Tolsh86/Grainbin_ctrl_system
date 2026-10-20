@@ -1,14 +1,15 @@
 import client from "./client";
 
 export interface LoginParams {
-  email: string;
+  username: string;
   password: string;
 }
 
 export interface UserResponse {
   id: string;
-  email: string;
-  full_name: string;
+  username: string;
+  email: string | null;
+  real_name: string;
   role: string;
   is_active: boolean;
   created_at: string;
@@ -27,9 +28,10 @@ export async function login(params: LoginParams): Promise<TokenResponse> {
 }
 
 export async function register(params: {
-  email: string;
+  username: string;
   password: string;
-  full_name: string;
+  real_name: string;
+  email?: string;
   role: string;
 }): Promise<UserResponse> {
   const { data } = await client.post("/auth/register", params);

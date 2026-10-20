@@ -111,7 +111,7 @@ npm run dev
 ```bash
 cd backend
 uv run alembic revision --autogenerate -m "描述你的变更"
-uv run alembic upgrade head
+uv run alembic upgrade headuv run alembic upgrade head
 ```
 
 ## 项目结构

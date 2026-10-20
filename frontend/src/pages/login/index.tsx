@@ -12,23 +12,18 @@ export default function Login() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
 
-  const onFinish = async (values: { email: string; password: string }) => {
+  const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
       const result = await login(values);
       setAuth(result.access_token, result.user);
-      message.success(`欢迎回来，${result.user.full_name}`);
-    } catch {
-      // 后端不可用时，使用 mock 登录跳过认证
-      message.info("演示模式：跳过后端认证");
-      setAuth("mock-token-001", {
-        id: "u1", email: values.email, full_name: "管理员",
-        role: "admin", is_active: true,
-        created_at: "2026-01-01", updated_at: "2026-01-01",
-      });
+      message.success(`欢迎回来，${result.user.real_name}`);
+      navigate("/dashboard", { replace: true });
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      message.error(detail || "登录失败，请检查账号、密码或网络连接");
     } finally {
       setLoading(false);
-      navigate("/dashboard", { replace: true });
     }
   };
 
@@ -50,7 +45,7 @@ export default function Login() {
           <div>
             <BankOutlined style={{ fontSize: 48, color: "#667eea" }} />
             <Title level={3} style={{ margin: "12px 0 4px" }}>
-              粮仓过控智能管理平台
+              兴天华过控智能平台
             </Title>
             <Text type="secondary">Grainbin Process Control System</Text>
           </div>
@@ -63,20 +58,19 @@ export default function Login() {
             style={{ textAlign: "left" }}
           >
             <Form.Item
-              name="email"
+              name="username"
               rules={[
-                { required: true, message: "请输入邮箱" },
-                { type: "email", message: "请输入有效的邮箱地址" },
+                { required: true, message: "请输入管理员账号" },
               ]}
             >
-              <Input prefix={<UserOutlined />} placeholder="邮箱" />
+              <Input prefix={<UserOutlined />} placeholder="管理员账号" autoComplete="username" />
             </Form.Item>
 
             <Form.Item
               name="password"
               rules={[{ required: true, message: "请输入密码" }]}
             >
-              <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+              <Input.Password prefix={<LockOutlined />} placeholder="密码" autoComplete="current-password" />
             </Form.Item>
 
             <Form.Item>
